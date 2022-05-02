@@ -1,1 +1,1 @@
-{"tpl":{"sim-vue-h5":{"url":"https://github.com/ChenZengQing/sim-vue-template.git","branch":"master"}}}
+{"tpl":{"sim-vue":{"name":"sim-vue","type":"git","path":"https://github.com/ChenZengQing/sim-vue-template.git","default":true,"branch":"master"}}}
