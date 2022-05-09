@@ -1,38 +1,112 @@
 'use strict'
-const co = require('co')
-const prompt = require('co-prompt')
-const config = require('../templates')
-const chalk = require('chalk')
-const fs = require('fs')
+const inquirer = require("inquirer");
+const config = require('../templates');
+const {checkTemplateNameExit, templateSave, templateList, formatterAnswers} = require("../utils/templateUtils");
+const {InvalidArgumentError} = require("commander");
+const {listShowTemplates} = require("./list");
+const log = require("../utils/log");
 
-module.exports = () => {
-  co(function* () {
-
-    // 分步接收用户输入的参数
-
-    let tplName = yield prompt('Template name: ')
-    let gitUrl = yield prompt('Git https link: ')
-    let branch = yield prompt('Branch: ')
-
-    // 避免重复添加
-    if (!config.tpl[tplName]) {
-      config.tpl[tplName] = {}
-      config.tpl[tplName]['url'] = gitUrl.replace(/[\u0000-\u0019]/g, '') // 过滤unicode字符
-      config.tpl[tplName]['branch'] = branch
-    } else {
-      console.log(chalk.red('Template has already existed!'))
-      process.exit()
-    }
-
-    // 把模板信息写入templates.json
-    fs.writeFile(__dirname + '/../templates.json', JSON.stringify(config), 'utf-8', (err) => {
-      if (err) console.log(err)
-      console.log(chalk.green('New template added!\n'))
-      console.log(chalk.grey('The last template list is: \n'))
-      console.log(config)
-      console.log('\n')
-      process.exit()
-    })
-  })
+const templateObject = {
+    name: '',
+    type: 'git',
+    path: '',
 }
 
+/**
+ * 新增模板
+ * @param template {{path: string, name: string, type: 'git'|'local'}}
+ * @param options {{path: string, name: string, type: 'git'|'local'}}
+ */
+const addTemplate = (template = templateObject, options = templateObject) => {
+    const checkedObject = {
+        name: options.name || template.name,
+        type: options.type || template.type,
+        path: options.path || template.path,
+        branch: 'master',
+        default: true,
+    };
+
+    checkTemplateNameExit(checkedObject.name, 'check', true)
+
+    const buildQuestion = (value, key) => {
+        return `${value && 'Make sure' || 'Input'} the ${key} for the template`
+    }
+
+    const questionList = [
+        {
+            name: 'name',
+            default: checkedObject.name,
+            type: 'input',
+            message: buildQuestion(checkedObject.name, 'name'),
+            validate: (input) => checkTemplateNameExit(input, 'inquirer', true),
+        },
+        {
+            type: 'list',
+            choices: ['git', 'local'],
+            name: 'type',
+            default: checkedObject.type,
+            message: buildQuestion(checkedObject.type, 'type'),
+        },
+        {
+            type: 'editor',
+            name: 'path',
+            default: checkedObject.path,
+            message: buildQuestion(checkedObject.path, 'path'),
+            validate: (input) => {
+                if (!input.trim()) throw new InvalidArgumentError('Template path is required!');
+                return true;
+            }
+        },
+        {
+            name: 'branch',
+            default: 'master',
+            message: buildQuestion(checkedObject.branch, 'branch'),
+            validate: (input) => {
+                if (!input.trim()) throw new InvalidArgumentError('Template branch is required!');
+                return true;
+            },
+            when: (answer) => answer.type === 'git'
+        },
+        {
+            type: 'confirm',
+            name: 'default',
+            default: true,
+            message: 'Do you want to set it as the default option'
+        }
+    ];
+
+    inquirer
+        .prompt(questionList)
+        .then(answers => {
+
+            formatterAnswers(answers);
+
+            if (answers.default) {
+                templateList().forEach(item => item.default = false);
+            }
+
+            config.tpl[answers.name] = {...answers, path: answers.path.replace(/[\u0000-\u0019]/g, '')};
+
+            templateSave(config).then(() => {
+                log.log('\n');
+                log.success('New template added!\n');
+                log.info('The last template list is: \n')
+                listShowTemplates();
+                log.log('\n')
+                process.exit()
+            }).catch(() => {
+                process.exit()
+            })
+        })
+        .catch((error) => {
+            if (error.isTtyError) {
+                log.error(`Prompt couldn't be rendered in the current environment`)
+            } else {
+                log.error(error)
+            }
+        })
+}
+
+module.exports = {
+    addTemplate,
+}

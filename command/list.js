@@ -1,8 +1,14 @@
 'use strict'
-const config = require('../templates')
+const {showLogo, templateList} = require("../utils/templateUtils");
+const log = require("../utils/log");
 
-module.exports = () => {
-	console.log(config.tpl)
-	process.exit()
+const listShowTemplates = (withLogo) => {
+    withLogo && showLogo();
+    log.table(templateList())
+    process.exit()
+}
+
+module.exports = {
+    listShowTemplates,
 }
 

@@ -1,39 +1,144 @@
 'use strict'
-const exec = require('child_process').exec
-const co = require('co')
-const prompt = require('co-prompt')
 const config = require('../templates')
-const chalk = require('chalk')
+const inquirer = require("inquirer");
+const os = require("os");
+const fs = require("fs");
+const fsExtra = require('fs-extra');
+const {InvalidArgumentError} = require("commander");
+const download = require("download-git-repo");
+const handlebars = require("handlebars");
+const ora = require("ora");
+const {getTemplateDefault, templateNameList, showLogo, formatterAnswers} = require("../utils/templateUtils");
+const log = require("../utils/log");
 
-module.exports = () => {
-  co(function* () {
-    // 处理用户输入
-    let tplName = yield prompt('Template name: ')
-    let projectName = yield prompt('Project name: ')
-    let gitUrl
-    let branch
-
-    if (!config.tpl[tplName]) {
-      console.log(chalk.red('\n × Template does not exit!'))
-      process.exit()
+const createSuccess = (spinner, projectConfig) => {
+    spinner.succeed();
+    const fileName = [
+        `${projectConfig.name}/package.json`,
+        `${projectConfig.name}/index.html`
+    ];
+    const meta = {
+        name: projectConfig.name,
+        version: projectConfig.version,
+        description: projectConfig.description,
+        author: projectConfig.author
     }
-    gitUrl = config.tpl[tplName].url
-    branch = config.tpl[tplName].branch
-
-    // git命令，远程拉取项目并自定义项目名
-    let cmdStr = `git clone ${gitUrl} ${projectName} && cd ${projectName} && git checkout ${branch}`
-
-    console.log(chalk.white('\n Start generating...'))
-
-    exec(cmdStr, (error, stdout, stderr) => {
-      if (error) {
-        console.log(error)
-        process.exit()
-      }
-      console.log(chalk.green('\n √ Generation completed!'))
-      console.log(`\n cd ${projectName} && npm install \n`)
-      process.exit()
-    })
-  })
+    fileName.forEach(item => {
+        if (fs.existsSync(item)) {
+            const content = fs.readFileSync(item).toString();
+            const result = handlebars.compile(content)(meta);
+            fs.writeFileSync(item, result);
+        }
+    });
+    showLogo();
+    log.success(`Successfully created project ${projectConfig.name}.`)
+    log.success('Get started with the following commands:\n')
+    log.bash(`cd ${projectConfig.name} && npm install`)
 }
 
+const createProjectFromGit = (projectConfig) => {
+    const spinner = ora('Download from template...');
+    spinner.start();
+    download(`direct:${projectConfig.template.path}#${projectConfig.template.branch}`, projectConfig.name, {clone: true}, function (err) {
+        if (err) {
+            spinner.fail();
+            log.error(err)
+        } else {
+            createSuccess(spinner, projectConfig)
+        }
+        process.exit();
+    })
+}
+
+const createProjectFromLocal = (projectConfig) => {
+    const spinner = ora('Creating from template...');
+    spinner.start();
+    fsExtra.copy(projectConfig.template.path.trim(), `./${projectConfig.name}`)
+        .then(() => {
+            createSuccess(spinner, projectConfig)
+            process.exit();
+        })
+        .catch(err => {
+            spinner.fail()
+            log.error(err)
+            process.exit();
+        })
+}
+
+const initProjectFromTemplate = (projectName = 'my-app', templateName = '') => {
+    inquirer.prompt([
+        {
+            type: 'input',
+            name: 'projectName',
+            default: projectName,
+            message: 'Is sure the project name',
+            validate: (input) => {
+                if (!input) throw new InvalidArgumentError('project name is required!');
+                if (fs.existsSync(input)) throw new InvalidArgumentError('directory already exists!');
+                return true
+            }
+        },
+        {
+            name: 'version',
+            default: '1.0.0',
+            message: 'input the project version'
+        },
+        {
+            name: 'description',
+            default: projectName,
+            message: 'input the project description'
+        },
+        {
+            name: 'author',
+            default: os.userInfo().username,
+            message: 'input the project author'
+        },
+        {
+            type: 'confirm',
+            name: 'defaultTemplate',
+            message: 'use the default template',
+            when: !templateName
+        },
+        {
+            type: 'list',
+            name: 'templateName',
+            default: templateNameList()[0],
+            choices: templateNameList(),
+            when: (answers) => {
+                if (!templateName) return !answers.defaultTemplate;
+                else return !templateNameList().some(item => item === templateName);
+            },
+            message: 'choose the project template',
+        },
+    ]).then(answers => {
+
+        formatterAnswers(answers);
+
+        const {projectName, version, description, author} = answers;
+
+        let template = answers.templateName || templateName;
+
+        if (answers.defaultTemplate) template = getTemplateDefault().name;
+
+        const projectConfig = {name: projectName, version, description, author, template: config.tpl[template]}
+
+        switch (projectConfig.template.type) {
+            case 'git':
+                createProjectFromGit(projectConfig);
+                break;
+            case 'local':
+                createProjectFromLocal(projectConfig);
+                break;
+            default:
+                log.warning('Type not supported yet!');
+                process.exit();
+        }
+    }).catch(err => {
+        log.error(err)
+        process.exit()
+    })
+}
+
+module.exports = {
+    initProjectFromTemplate
+}
