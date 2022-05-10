@@ -2,7 +2,6 @@
 const config = require('../templates')
 const inquirer = require("inquirer");
 const os = require("os");
-const fs = require("fs");
 const fsExtra = require('fs-extra');
 const {InvalidArgumentError} = require("commander");
 const download = require("download-git-repo");
@@ -13,10 +12,14 @@ const log = require("../utils/log");
 
 const createSuccess = (spinner, projectConfig) => {
     spinner.succeed();
+    // 模板文件列表
     const fileName = [
         `${projectConfig.name}/package.json`,
         `${projectConfig.name}/index.html`
     ];
+    const removeFiles = [
+        `${projectConfig.name}/.git`
+    ]
     const meta = {
         name: projectConfig.name,
         version: projectConfig.version,
@@ -24,12 +27,17 @@ const createSuccess = (spinner, projectConfig) => {
         author: projectConfig.author
     }
     fileName.forEach(item => {
-        if (fs.existsSync(item)) {
-            const content = fs.readFileSync(item).toString();
+        if (fsExtra.pathExistsSync(item)) {
+            const content = fsExtra.readFileSync(item).toString();
             const result = handlebars.compile(content)(meta);
-            fs.writeFileSync(item, result);
+            fsExtra.outputFileSync(item, result);
         }
     });
+    // 删除多余文件
+    removeFiles.forEach(item => {
+        fsExtra.removeSync(item);
+    })
+
     showLogo();
     log.success(`Successfully created project ${projectConfig.name}.`)
     log.success('Get started with the following commands:\n')
@@ -74,7 +82,7 @@ const initProjectFromTemplate = (projectName = 'my-app', templateName = '') => {
             message: 'Is sure the project name',
             validate: (input) => {
                 if (!input) throw new InvalidArgumentError('project name is required!');
-                if (fs.existsSync(input)) throw new InvalidArgumentError('directory already exists!');
+                if (fsExtra.pathExistsSync(input)) throw new InvalidArgumentError('directory already exists!');
                 return true
             }
         },

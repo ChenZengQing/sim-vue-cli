@@ -1,7 +1,7 @@
 const config = require("../templates.json");
 const {InvalidArgumentError} = require("commander");
 const log = require("./log");
-const fs = require("fs");
+const fsExtra = require('fs-extra');
 
 /**
  * 打印 Logo
@@ -130,13 +130,11 @@ const checkTemplateType = (type) => {
 const templateSave = (configData = config) => {
     getTemplateDefault()
     return new Promise((resolve = () => {}, reject = () => {}) => {
-        fs.writeFile(__dirname + '/../templates.json', JSON.stringify(configData), 'utf-8', (err) => {
-            if (err) {
-                log.error(err);
-                reject(err);
-            } else {
-                resolve();
-            }
+        fsExtra.outputFile(__dirname + '/../templates.json', JSON.stringify(configData), 'utf-8').then(() => {
+            resolve();
+        }).catch(err => {
+            log.error(err);
+            reject(err);
         })
     })
 }
