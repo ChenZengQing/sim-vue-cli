@@ -5,6 +5,7 @@
     "main": "bin/sim.js",
     "scripts": {
         "release": "npm publish",
+        "release:patch": "npm version patch && npm run release && git push",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
     "bin": {
