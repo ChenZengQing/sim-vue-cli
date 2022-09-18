@@ -7,9 +7,9 @@ const {listShowTemplates} = require("./list");
 const log = require("../utils/log");
 
 const templateObject = {
-    name: '',
-    type: 'git',
-    path: '',
+    name: '', // 配置项名称
+    type: 'git', // 模板工程来源
+    path: '', // 模板地址
 }
 
 /**
