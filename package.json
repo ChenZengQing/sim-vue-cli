@@ -1,6 +1,6 @@
 {
     "name": "sim-vue",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "",
     "main": "bin/sim.js",
     "scripts": {
